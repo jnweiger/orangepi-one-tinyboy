@@ -1,0 +1,26 @@
+#! /bin/sh
+#
+# The tinyboy script here can be used to transfer a gcode file from 
+# your workstation (running cura) to the
+# orangepi (running sendtinygcode). 
+# It uploads the file and triggers the print inside a screen session,
+# so that we can disconnect without disturbing the print.
+#
+ping -c2 tinyboy
+if [ "$?" != 0 ]; then
+  echo "Ping tinyboy failed. Check network."
+  echo "Press ENTER to contine"
+  read a
+fi
+
+set -x
+if [ -z "$*" ]; then 
+  rsync -tv *.gcode root@tinyboy:gcode
+else
+  rsync -tv "$@" root@tinyboy:gcode
+  #ssh -t root@tinyboy "screen -X stuff 'sendtinygcode $*\\n'"
+  ssh -t root@tinyboy "screen -X stuff 'sendtinygcode $*'"
+fi
+
+sleep 2
+ssh -tv root@tinyboy screen -D -R
