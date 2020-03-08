@@ -21,5 +21,7 @@
 * Check default route and namserver, if needed
     * `route add default gw 10.42.0.100`
     * `echo nameserver 8.8.8.8 >> /etc/resolv.conf`
-* `apt-get update; apt-get upgrade; sync; reboot`
+* `apt-get update; apt-get upgrade`
+* apt install python3-serial linux-buster-root-orangepione`
+* `sync; reboot`
 

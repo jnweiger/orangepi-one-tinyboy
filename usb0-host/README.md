@@ -1,45 +1,46 @@
 ## Enable the micro-usb connector as a host
 
-The micro-usb connector is usb0. Per default it is in peripheral mode.
-Switching to host mode, was easy with the 3.3.113 kernel. But the realtek wifi driver is not working well with this old kernel.
-We update to the buster-next kernel, which is 4.19.62
-
-But then enabling the port in `host` mode is more difficult:
+The micro-usb connector is usb0. Per default it is in otg mode.
 https://forum.armbian.com/topic/4814-orange-pi-one-usb-otg/
-discusses what is needed.  https://patchwork.kernel.org/patch/9632731/
+discusses what is needed.
 
-    wget https://git.kernel.org/pub/scm/linux/kernel/git/arm64/linux.git/plain/arch/arm/boot/dts/sun8i-h3-orangepi-one.dts
+You need to tweak DT by changing the "dr-mode" to "host" since it is defaulted to "otg" for usb-gadget.
+Decompile the DTB using "dtc" compiler, edit the resulting source by changing "dir-mode" to "host", 
+and recompile the DTB
+```
+cd /boot/dtb
+dtb=sun8i-h3-orangepi-one.dtb           # for orangepi-one
+dts=$(basename $dtb .dtb).dts
+cp $dtb $dtb.old
+dtc -I dtb -O dts -o $dts $dtb
+grep dr_mode $dts
+                        dr_mode = "otg";
 
-This should toogle gpio pin PL2 to power the port -- it apparently does not work for me.
+sed -i -e 's/dr_mode = "otg";/dr_mode = "host";/g' $dts
+dtc -I dts -O dtb -o $dtb $dts
+# can we ignore ca 200: Warnings (.._property): ... cell .. is not a phandle reference
+reboot
+```
+Plug in a USB power monitor. It should no light up early during reboot (ca. 8 sec).
 
-### Try toggle the pin manually
+```
+[Sun Mar  8 21:07:49 2020] rtl8192cu: Board Type 0
+[Sun Mar  8 21:07:49 2020] rtl_usb: rx_max_size 15360, rx_urb_num 8, in_ep 1
+[Sun Mar  8 21:07:49 2020] rtl8192cu: Loading firmware rtlwifi/rtl8192cufw_TMSC.bin
+[Sun Mar  8 21:07:49 2020] ieee80211 phy0: Selected rate control algorithm 'rtl_rc'
+[Sun Mar  8 21:07:49 2020] usbcore: registered new interface driver rtl8192cu
+[Sun Mar  8 21:07:49 2020] rtl8192cu 1-1:1.0 wlx0013ef6d01cf: renamed from wlan0
+```
 
-According to https://linux-sunxi.org/GPIO the gpio number as used in /sys/class/gpio is computed as
-(position of letter in alphabet - 1) * 32 + pin number
+Yeah, and `iwconfig` now shows a new device
 
-PL2 is at (b'L'[0]-b'A'[0])*32+2 = 11*32+2 = 354
-
-Double check the computation:
-    grep PL2 /sys/kernel/debug/pinctrl/*/pinmux-pins
-     /sys/kernel/debug/pinctrl/1f02c00.pinctrl/pinmux-pins:pin 354 (PL2): (MUX UNCLAIMED) 1f02c00.pinctrl:354
-
-But
-    echo 354 > /sys/class/gpio/export
-    bash: echo: write error: Device or resource busy
-
-
-
-
-apt-get install gpiod
-gpioinfo
-...
- gpiochip1 - 32 lines:
-	line   0:      unnamed       unused   input  active-high
-	line   1:      unnamed       unused   input  active-high
-	line   2:      unnamed  "usb0-vbus"  output  active-high [used]
-	line   3:      unnamed        "sw4"   input   active-low [used]
-...
-# Hmmm.
+```
+wlx0013ef6d01cf  IEEE 802.11  ESSID:off/any  
+          Mode:Managed  Access Point: Not-Associated   Tx-Power=20 dBm   
+          Retry short limit:7   RTS thr=2347 B   Fragment thr:off
+          Encryption key:off
+          Power Management:off
+```
 
 [Sun Mar  8 04:09:30 2020] usbcore: registered new interface driver usbfs
 [Sun Mar  8 04:09:30 2020] usbcore: registered new interface driver hub
