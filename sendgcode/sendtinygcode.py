@@ -9,13 +9,29 @@
 # 2016-08-14, jw -- fixed upward move to be really relative.
 # 2016-09-05, jw -- better exception handling.
 # 2016-10-01, jw -- tested and fixed error handling in ser_readline()
-# 2016-10-14, jw -- est_time_min from cura ;TIME: string
-#
-import sys, re, serial, time
+# 2016-10-14, jw -- est_time_m from cura ;TIME: string
+# 2017-05-18, jw -- writing log file.
+# 2017-09-03, jw -- loglookup() added.
 
+import sys, re, serial, time
 
 verbose=False
 
+logfile='print.log'
+
+def loglookup(logfile, name):
+  pat = re.compile(re.escape(name) + " (\d+)")
+  seconds=None
+  minutes=None
+  with open(logfile) as f:
+    for line in f:
+      m = pat.match(line)
+      if m: seconds = int(m.group(1))
+  if seconds: 
+    minutes = int(seconds/60.+.5)
+    print "Last printed duration: %d min\n" % minutes
+  return minutes
+ 
 ser=None
 errorcount=0
 def ser_readline():
@@ -61,14 +77,17 @@ def ser_open(device=None, baud=115200, timeout=3, writeTimeout=10000):
 
   # gobble away initial boiler plate output, if any
   seen = ser_readline()
+  if len(seen) == 6 and seen[:4] == 'wait': seen = ''
   while len(seen):
     print "seen: ", seen,
     seen = ser_readline()
+    if len(seen) == 6 and seen[:4] == 'wait': seen = ''
 
 def ser_check():
   empty_count = 0
   while True:
     seen = ser_readline()
+    if len(seen) == 6 and seen[:4] == 'wait': seen = ''
     if seen[:2] == 'ok':
       if verbose: print seen
       break
@@ -106,7 +125,12 @@ count = 0
 tstamp = time.time()
 start_tstamp = tstamp
 
-est_time_min = 0
+last_print_m = loglookup(logfile, file)
+
+open(logfile, 'a').write(file + " -\n")
+
+est_time_m = 0
+perc_mark = ''
 
 while True:
   line = fd.readline()
@@ -114,8 +138,12 @@ while True:
   if line == '': break
   m = re.match(';TIME:(\d*)', line)
   if (m):
-    est_time_min = int(int(m.group(1))/60.)
-    print("Estimated print time: %d min." % est_time_min)
+    est_time_m = int(int(m.group(1))/60.+.5)
+    print("Estimated print time: %d min." % est_time_m)
+    if last_print_m and last_print_m > est_time_m:
+      print("Using last print time: %d min." % last_print_m)
+      est_time_m = last_print_m
+      perc_mark = 'L'
   line = re.sub(';.*', '', line)
   line = re.sub('\s*[\n\r]+$', '', line)
   if line == '': continue
@@ -135,7 +163,10 @@ while True:
     bps = float(count) / (1 + now - start_tstamp) 
     eta = ''
     elapsed = "%d min" % (int((now - start_tstamp)/60))
-    if (est_time_min): elapsed += " / %d min" % est_time_min
+    if est_time_m:
+      elapsed += " / %d min" % est_time_m
+      if perc_mark != '': elapsed += ' ' + perc_mark
+
     if (now > start_tstamp + 2*60):	# start eta calc after 2 min
       secs = int(float(total-count)/bps)
       min = int(secs/60)
@@ -143,4 +174,4 @@ while True:
     print "%.1f %%, %s" % (count * 100. / total, elapsed)
     tstamp = now
     
-
+open(logfile, 'a').write(file + " " + str(tstamp-start_tstamp) + "\n")
