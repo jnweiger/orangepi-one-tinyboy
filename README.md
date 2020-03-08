@@ -16,7 +16,7 @@
 * Remove the micro sd card and boot the orangepi one with it.
 * Connect ethernet cable and patiently wait ca. 2h for `ping 10.42.0.22` to respond.
 
-### initial login
+### initial update
 * `ssh root@10.42.0.22` -- intitial root password is `1234`
 * Check default route and namserver, if needed
     * `route add default gw 10.42.0.100`
